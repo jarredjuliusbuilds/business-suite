@@ -20,6 +20,20 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    from flask import g
+    from flask_login import current_user
+
+    @app.before_request
+    def load_current_business():
+        if current_user.is_authenticated:
+            g.business_id = current_user.business.id
+
+    from app.auth.routes import auth_bp
+    app.register_blueprint(auth_bp)
+
+    from app.dashboard.routes import dashboard_bp
+    app.register_blueprint(dashboard_bp)
+
     @app.route("/")
     def index():
         return "App is running"
