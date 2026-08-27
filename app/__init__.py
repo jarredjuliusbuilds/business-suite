@@ -34,8 +34,4 @@ def create_app():
     from app.dashboard.routes import dashboard_bp
     app.register_blueprint(dashboard_bp)
 
-    @app.route("/")
-    def index():
-        return "App is running"
-
     return app
