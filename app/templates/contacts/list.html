@@ -8,14 +8,16 @@
 {% if contacts %}
 <div class="list-group">
     {% for c in contacts %}
-    <a href="{{ url_for('contacts.edit', contact_id=c.id) }}" class="list-group-item list-group-item-action">
+    <div class="list-group-item list-group-item-action" role="button" tabindex="0"
+         onclick="window.location.href='{{ url_for('contacts.edit', contact_id=c.id) }}'"
+         onkeydown="if(event.key==='Enter'){window.location.href='{{ url_for('contacts.edit', contact_id=c.id) }}';}">
         <div class="d-flex justify-content-between">
             <strong>{{ c.name }}</strong>
             <span class="badge bg-secondary">{{ c.type }}</span>
         </div>
-        {% if c.phone %}<small class="text-muted">{{ c.phone }}</small>{% endif %}
+        {% if c.phone %}<a href="tel:{{ c.phone }}" class="text-decoration-none small text-muted" onclick="event.stopPropagation();">📞 {{ c.phone }}</a>{% endif %}
         {% if c.email %}<small class="text-muted d-block">{{ c.email }}</small>{% endif %}
-    </a>
+    </div>
     {% endfor %}
 </div>
 {% else %}
