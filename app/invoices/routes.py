@@ -1,5 +1,11 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, g
+from flask import Blueprint, render_template, redirect, url_for, flash, request, g, Response
 from flask_login import login_required
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from app.extensions import db
@@ -123,6 +129,103 @@ def new():
 def view(invoice_id):
     invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
     return render_template("invoices/view.html", invoice=invoice)
+
+
+@invoices_bp.route("/<int:invoice_id>/pdf")
+@login_required
+def download_pdf(invoice_id):
+    invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=20*mm, rightMargin=20*mm)
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle("InvoiceTitle", parent=styles["Heading1"], fontSize=24, textColor=colors.HexColor("#444444"))
+    business_style = ParagraphStyle("BusinessName", parent=styles["Heading2"], fontSize=16)
+    normal = styles["Normal"]
+    small_grey = ParagraphStyle("SmallGrey", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#666666"))
+
+    elements = []
+
+    header_data = [[
+        Paragraph(invoice.business.name, business_style),
+        Paragraph(f"<b>INVOICE</b><br/>{invoice.invoice_number}", title_style),
+    ]]
+    header_table = Table(header_data, colWidths=[280, 200])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 20*mm))
+
+    customer_lines = f"<b>Bill To:</b><br/>{invoice.customer.name}"
+    if invoice.customer.email:
+        customer_lines += f"<br/>{invoice.customer.email}"
+    if invoice.customer.phone:
+        customer_lines += f"<br/>{invoice.customer.phone}"
+
+    meta_lines = f"Issue Date: {invoice.issue_date.strftime('%d %b %Y')}<br/>"
+    if invoice.due_date:
+        meta_lines += f"Due Date: {invoice.due_date.strftime('%d %b %Y')}<br/>"
+    meta_lines += f"Status: {invoice.status.upper()}"
+
+    meta_data = [[Paragraph(customer_lines, normal), Paragraph(meta_lines, normal)]]
+    meta_table = Table(meta_data, colWidths=[280, 200])
+    meta_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    elements.append(meta_table)
+    elements.append(Spacer(1, 15*mm))
+
+    line_data = [["Description", "Qty", "Unit Price", "Total"]]
+    for item in invoice.line_items:
+        line_data.append([
+            item.description,
+            str(item.quantity),
+            f"R {item.unit_price:.2f}",
+            f"R {item.line_total:.2f}",
+        ])
+
+    items_table = Table(line_data, colWidths=[240, 60, 90, 90])
+    items_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#666666")),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.2, colors.HexColor("#333333")),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#eeeeee")),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(items_table)
+    elements.append(Spacer(1, 10*mm))
+
+    totals_data = [
+        ["Subtotal", f"R {invoice.subtotal:.2f}"],
+        ["Tax", f"R {invoice.tax_amount:.2f}"],
+        ["Total", f"R {invoice.total:.2f}"],
+    ]
+    totals_table = Table(totals_data, colWidths=[100, 100], hAlign="RIGHT")
+    totals_table.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 2), (-1, 2), 12),
+        ("LINEABOVE", (0, 2), (-1, 2), 1.2, colors.HexColor("#333333")),
+        ("TOPPADDING", (0, 2), (-1, 2), 8),
+    ]))
+    elements.append(totals_table)
+
+    if invoice.notes:
+        elements.append(Spacer(1, 15*mm))
+        elements.append(Paragraph(invoice.notes, small_grey))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    return Response(
+        buffer.read(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=invoice-{invoice.invoice_number}.pdf"}
+    )
 
 
 @invoices_bp.route("/<int:invoice_id>/mark-paid", methods=["POST"])

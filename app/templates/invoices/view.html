@@ -5,6 +5,8 @@
     <span class="badge bg-{{ 'success' if invoice.status == 'paid' else ('warning' if invoice.status == 'sent' else ('danger' if invoice.status == 'overdue' else 'secondary')) }}">{{ invoice.status }}</span>
 </div>
 
+<a href="{{ url_for('invoices.download_pdf', invoice_id=invoice.id) }}" class="btn btn-outline-secondary btn-sm mb-3">Download PDF</a>
+
 <p>
     <strong>{{ invoice.customer.name }}</strong><br>
     <small class="text-muted">Issued {{ invoice.issue_date.strftime('%d %b %Y') }}{% if invoice.due_date %} &middot; Due {{ invoice.due_date.strftime('%d %b %Y') }}{% endif %}</small>
