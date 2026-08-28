@@ -1,60 +1,42 @@
 {% extends "base.html" %}
-{% block title %}Invoices{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h4 mb-0">Invoices</h1>
-    <a href="{{ url_for('invoices.new_invoice') }}" class="btn btn-primary btn-sm">New Invoice</a>
+    <h3>Invoices</h3>
+    <a href="{{ url_for('invoices.new') }}" class="btn btn-primary btn-sm">+ New</a>
 </div>
 
+<form method="GET" class="mb-3">
+    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Draft</option>
+        <option value="sent" {% if status_filter == 'sent' %}selected{% endif %}>Sent</option>
+        <option value="paid" {% if status_filter == 'paid' %}selected{% endif %}>Paid</option>
+        <option value="overdue" {% if status_filter == 'overdue' %}selected{% endif %}>Overdue</option>
+    </select>
+</form>
+
 {% if invoices %}
-<div class="table-responsive">
-    <table class="table table-bordered align-middle">
-        <thead class="table-light">
-            <tr>
-                <th>Invoice #</th>
-                <th>Customer</th>
-                <th>Issue Date</th>
-                <th>Total</th>
-                <th>Status</th>
-                <th style="width: 180px;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for inv in invoices %}
-            <tr>
-                <td>{{ inv.invoice_number }}</td>
-                <td>{{ inv.customer.name if inv.customer else '—' }}</td>
-                <td>{{ inv.issue_date.strftime('%Y-%m-%d') }}</td>
-                <td>{{ "%.2f"|format(inv.total) }}</td>
-                <td>
-                    {% if inv.status == 'paid' %}
-                        <span class="badge bg-success">Paid</span>
-                    {% elif inv.status == 'sent' %}
-                        <span class="badge bg-info">Sent</span>
-                    {% else %}
-                        <span class="badge bg-secondary">Draft</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div class="d-flex flex-wrap gap-1">
-                        <a href="{{ url_for('invoices.edit_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
-                        <form method="POST" action="{{ url_for('invoices.mark_sent', invoice_id=inv.id) }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-info">Mark Sent</button>
-                        </form>
-                        <form method="POST" action="{{ url_for('invoices.mark_paid', invoice_id=inv.id) }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-success">Mark Paid</button>
-                        </form>
-                        <form method="POST" action="{{ url_for('invoices.delete_invoice', invoice_id=inv.id) }}" class="d-inline" onsubmit="return confirm('Delete this invoice?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="list-group">
+    {% for inv in invoices %}
+    <a href="{{ url_for('invoices.view', invoice_id=inv.id) }}" class="list-group-item list-group-item-action">
+        <div class="d-flex justify-content-between">
+            <div>
+                <strong>{{ inv.invoice_number }}</strong><br>
+                <small class="text-muted">{{ inv.customer.name }} &middot; {{ inv.issue_date.strftime('%d %b %Y') }}</small>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-{{ 'success' if inv.status == 'paid' else ('warning' if inv.status == 'sent' else ('danger' if inv.status == 'overdue' else 'secondary')) }}">{{ inv.status }}</span><br>
+                <strong>R {{ "%.2f"|format(inv.total) }}</strong>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
 </div>
 {% else %}
-<p>No invoices yet. <a href="{{ url_for('invoices.new_invoice') }}">Create your first invoice</a>.</p>
+<p class="text-muted">No invoices yet.</p>
 {% endif %}
+
+<div class="mt-4">
+    <a href="{{ url_for('dashboard.index') }}">&larr; Back to dashboard</a>
+</div>
 {% endblock %}

@@ -96,7 +96,7 @@ class Invoice(db.Model):
 
     business = db.relationship('Business', backref=db.backref('invoices', lazy=True))
     customer = db.relationship('Contact', backref=db.backref('invoices', lazy=True))
-    line_items = db.relationship('InvoiceLineItem', backref='invoice', cascade='all, delete-orphan', lazy=True)
+    line_items = db.relationship('InvoiceLineItem', backref='invoice', cascade='all, delete-orphan', order_by='InvoiceLineItem.id')
 
 
 class InvoiceLineItem(db.Model):

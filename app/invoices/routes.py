@@ -1,265 +1,155 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, g
-from flask_login import login_required, current_user
+from flask_login import login_required
+from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
-import datetime
-
 from app.extensions import db
 from app.models import Invoice, InvoiceLineItem, Contact, Business
 from app.utils import scoped
 
-invoices_bp = Blueprint('invoices', __name__, url_prefix='/invoices')
+invoices_bp = Blueprint("invoices", __name__, url_prefix="/invoices")
 
 
-def get_next_invoice_number(business_id):
-    """Return the next sequential invoice number for the business as INV-XXXX."""
-    business = Business.query.get(business_id)
-    next_num = business.next_invoice_number
-    return f"INV-{next_num:04d}"
+def _generate_invoice_number():
+    """Atomically claim the next invoice number for the current business."""
+    business = Business.query.filter_by(id=g.business_id).with_for_update().first()
+    number = business.next_invoice_number
+    business.next_invoice_number = number + 1
+    return f"INV-{number:04d}"
 
 
-def increment_invoice_number(business_id):
-    """Increment the business's next_invoice_number counter."""
-    business = Business.query.get(business_id)
-    business.next_invoice_number += 1
-    db.session.add(business)
-
-
-def calculate_totals(items, tax_rate_decimal):
-    """Given a list of dicts with quantity and unit_price, calculate subtotal, tax, total."""
-    subtotal = Decimal('0.00')
-    for item in items:
-        qty = Decimal(str(item['quantity']))
-        price = Decimal(str(item['unit_price']))
-        line_total = qty * price
-        item['line_total'] = line_total
-        subtotal += line_total
-    tax_amount = subtotal * (tax_rate_decimal / Decimal('100'))
-    total = subtotal + tax_amount
-    return subtotal, tax_amount, total
-
-
-@invoices_bp.route('/')
+@invoices_bp.route("/")
 @login_required
-def list_invoices():
-    invoices = scoped(Invoice).order_by(Invoice.created_at.desc()).all()
-    return render_template('invoices/list.html', invoices=invoices)
+def list():
+    status_filter = request.args.get("status")
+    query = scoped(Invoice)
+    if status_filter:
+        query = query.filter(Invoice.status == status_filter)
+    invoices = query.order_by(Invoice.issue_date.desc()).all()
+    return render_template("invoices/list.html", invoices=invoices, status_filter=status_filter or "")
 
 
-@invoices_bp.route('/new', methods=['GET', 'POST'])
+@invoices_bp.route("/new", methods=["GET", "POST"])
 @login_required
-def new_invoice():
-    if request.method == 'GET':
-        customers = scoped(Contact).filter(Contact.type == 'customer').order_by(Contact.name).all()
-        return render_template('invoices/form.html', invoice=None, customers=customers)
+def new():
+    customers = scoped(Contact).filter_by(type="customer").order_by(Contact.name).all()
 
-    # POST: create invoice
-    customer_id = request.form.get('customer_id', type=int)
-    issue_date_str = request.form.get('issue_date')
-    due_date_str = request.form.get('due_date')
-    notes = request.form.get('notes', '').strip()
-    status = request.form.get('status', 'draft')
-    if status not in ('draft', 'sent', 'paid'):
-        status = 'draft'
+    if request.method == "POST":
+        error = None
+        customer_id = request.form.get("customer_id")
+        if not customer_id:
+            error = "Select a customer."
 
-    # Validate customer
-    if not customer_id:
-        flash('Please select a customer.', 'error')
-        return redirect(url_for('invoices.new_invoice'))
-
-    customer = scoped(Contact).filter(Contact.id == customer_id, Contact.type == 'customer').first()
-    if not customer:
-        flash('Invalid customer.', 'error')
-        return redirect(url_for('invoices.new_invoice'))
-
-    # Parse dates
-    try:
-        issue_date = datetime.datetime.strptime(issue_date_str, '%Y-%m-%d').date() if issue_date_str else datetime.date.today()
-        due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else None
-    except ValueError:
-        flash('Invalid date format.', 'error')
-        return redirect(url_for('invoices.new_invoice'))
-
-    # Parse line items
-    descriptions = request.form.getlist('description')
-    quantities = request.form.getlist('quantity')
-    unit_prices = request.form.getlist('unit_price')
-
-    items = []
-    for desc, qty_str, price_str in zip(descriptions, quantities, unit_prices):
-        desc = desc.strip()
-        if not desc:
-            continue
+        issue_date_str = request.form.get("issue_date", "").strip()
         try:
-            qty = Decimal(qty_str)
-            price = Decimal(price_str)
-            if qty < 0 or price < 0:
-                raise InvalidOperation
-        except (InvalidOperation, ValueError):
-            flash('Invalid quantity or price for line item.', 'error')
-            return redirect(url_for('invoices.new_invoice'))
-        items.append({
-            'description': desc,
-            'quantity': qty,
-            'unit_price': price
-        })
+            issue_date = datetime.strptime(issue_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            error = "Enter a valid issue date."
+            issue_date = None
 
-    if not items:
-        flash('At least one line item is required.', 'error')
-        return redirect(url_for('invoices.new_invoice'))
+        due_date_str = request.form.get("due_date", "").strip()
+        due_date = None
+        if due_date_str:
+            try:
+                due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                error = "Enter a valid due date."
 
-    # Get business's tax rate
-    business = Business.query.get(g.business_id)
-    tax_rate = Decimal(str(business.tax_rate))
+        descriptions = request.form.getlist("line_description[]")
+        quantities = request.form.getlist("line_quantity[]")
+        unit_prices = request.form.getlist("line_unit_price[]")
 
-    subtotal, tax_amount, total = calculate_totals(items, tax_rate)
+        line_items_data = []
+        subtotal = Decimal("0.00")
+        for desc, qty, price in zip(descriptions, quantities, unit_prices):
+            desc = desc.strip()
+            if not desc:
+                continue
+            try:
+                qty_dec = Decimal(qty)
+                price_dec = Decimal(price)
+            except InvalidOperation:
+                error = "Enter valid numbers for quantity and price on every line."
+                break
+            line_total = qty_dec * price_dec
+            subtotal += line_total
+            line_items_data.append((desc, qty_dec, price_dec, line_total))
 
-    # Generate invoice number and increment counter
-    invoice_number = get_next_invoice_number(g.business_id)
-    increment_invoice_number(g.business_id)
+        if not line_items_data and not error:
+            error = "Add at least one line item."
 
-    invoice = Invoice(
-        business_id=g.business_id,
-        invoice_number=invoice_number,
-        customer_id=customer.id,
-        issue_date=issue_date,
-        due_date=due_date,
-        status=status,
-        notes=notes,
-        subtotal=subtotal,
-        tax_amount=tax_amount,
-        total=total
-    )
-    db.session.add(invoice)
-    db.session.flush()  # get invoice.id
+        if error:
+            flash(error, "error")
+            return render_template("invoices/form.html", invoice=None, customers=customers, today=date.today().isoformat())
 
-    for item in items:
-        line = InvoiceLineItem(
-            invoice_id=invoice.id,
-            description=item['description'],
-            quantity=item['quantity'],
-            unit_price=item['unit_price'],
-            line_total=item['line_total']
+        tax_rate = Decimal("0")
+        business = Business.query.filter_by(id=g.business_id).first()
+        tax_rate = business.tax_rate or Decimal("0")
+        tax_amount = (subtotal * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+        total = subtotal + tax_amount
+
+        invoice = Invoice(
+            business_id=g.business_id,
+            invoice_number=_generate_invoice_number(),
+            customer_id=customer_id,
+            issue_date=issue_date,
+            due_date=due_date,
+            status="draft",
+            notes=request.form.get("notes", "").strip() or None,
+            subtotal=subtotal,
+            tax_amount=tax_amount,
+            total=total,
         )
-        db.session.add(line)
+        db.session.add(invoice)
+        db.session.flush()
 
-    db.session.commit()
-    flash('Invoice created successfully.', 'success')
-    return redirect(url_for('invoices.list_invoices'))
+        for desc, qty, price, line_total in line_items_data:
+            db.session.add(InvoiceLineItem(
+                invoice_id=invoice.id,
+                description=desc,
+                quantity=qty,
+                unit_price=price,
+                line_total=line_total,
+            ))
+
+        db.session.commit()
+        flash(f"Invoice {invoice.invoice_number} created.", "success")
+        return redirect(url_for("invoices.view", invoice_id=invoice.id))
+
+    return render_template("invoices/form.html", invoice=None, customers=customers, today=date.today().isoformat())
 
 
-@invoices_bp.route('/<int:invoice_id>/edit', methods=['GET', 'POST'])
+@invoices_bp.route("/<int:invoice_id>")
 @login_required
-def edit_invoice(invoice_id):
-    invoice = scoped(Invoice).filter(Invoice.id == invoice_id).first_or_404()
-    if request.method == 'GET':
-        customers = scoped(Contact).filter(Contact.type == 'customer').order_by(Contact.name).all()
-        return render_template('invoices/form.html', invoice=invoice, customers=customers)
-
-    # POST: update invoice
-    customer_id = request.form.get('customer_id', type=int)
-    issue_date_str = request.form.get('issue_date')
-    due_date_str = request.form.get('due_date')
-    notes = request.form.get('notes', '').strip()
-    status = request.form.get('status', 'draft')
-    if status not in ('draft', 'sent', 'paid'):
-        status = 'draft'
-
-    customer = scoped(Contact).filter(Contact.id == customer_id, Contact.type == 'customer').first()
-    if not customer:
-        flash('Invalid customer.', 'error')
-        return redirect(url_for('invoices.edit_invoice', invoice_id=invoice.id))
-
-    try:
-        issue_date = datetime.datetime.strptime(issue_date_str, '%Y-%m-%d').date() if issue_date_str else datetime.date.today()
-        due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else None
-    except ValueError:
-        flash('Invalid date format.', 'error')
-        return redirect(url_for('invoices.edit_invoice', invoice_id=invoice.id))
-
-    descriptions = request.form.getlist('description')
-    quantities = request.form.getlist('quantity')
-    unit_prices = request.form.getlist('unit_price')
-
-    items = []
-    for desc, qty_str, price_str in zip(descriptions, quantities, unit_prices):
-        desc = desc.strip()
-        if not desc:
-            continue
-        try:
-            qty = Decimal(qty_str)
-            price = Decimal(price_str)
-            if qty < 0 or price < 0:
-                raise InvalidOperation
-        except (InvalidOperation, ValueError):
-            flash('Invalid quantity or price for line item.', 'error')
-            return redirect(url_for('invoices.edit_invoice', invoice_id=invoice.id))
-        items.append({
-            'description': desc,
-            'quantity': qty,
-            'unit_price': price
-        })
-
-    if not items:
-        flash('At least one line item is required.', 'error')
-        return redirect(url_for('invoices.edit_invoice', invoice_id=invoice.id))
-
-    business = Business.query.get(g.business_id)
-    tax_rate = Decimal(str(business.tax_rate))
-
-    subtotal, tax_amount, total = calculate_totals(items, tax_rate)
-
-    # Update invoice fields
-    invoice.customer_id = customer.id
-    invoice.issue_date = issue_date
-    invoice.due_date = due_date
-    invoice.status = status
-    invoice.notes = notes
-    invoice.subtotal = subtotal
-    invoice.tax_amount = tax_amount
-    invoice.total = total
-
-    # Delete existing line items and add new ones
-    InvoiceLineItem.query.filter_by(invoice_id=invoice.id).delete()
-    for item in items:
-        line = InvoiceLineItem(
-            invoice_id=invoice.id,
-            description=item['description'],
-            quantity=item['quantity'],
-            unit_price=item['unit_price'],
-            line_total=item['line_total']
-        )
-        db.session.add(line)
-
-    db.session.commit()
-    flash('Invoice updated successfully.', 'success')
-    return redirect(url_for('invoices.list_invoices'))
+def view(invoice_id):
+    invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+    return render_template("invoices/view.html", invoice=invoice)
 
 
-@invoices_bp.route('/<int:invoice_id>/delete', methods=['POST'])
-@login_required
-def delete_invoice(invoice_id):
-    invoice = scoped(Invoice).filter(Invoice.id == invoice_id).first_or_404()
-    db.session.delete(invoice)
-    db.session.commit()
-    flash('Invoice deleted.', 'success')
-    return redirect(url_for('invoices.list_invoices'))
-
-
-@invoices_bp.route('/<int:invoice_id>/mark-sent', methods=['POST'])
-@login_required
-def mark_sent(invoice_id):
-    invoice = scoped(Invoice).filter(Invoice.id == invoice_id).first_or_404()
-    invoice.status = 'sent'
-    db.session.commit()
-    flash('Invoice marked as sent.', 'success')
-    return redirect(url_for('invoices.list_invoices'))
-
-
-@invoices_bp.route('/<int:invoice_id>/mark-paid', methods=['POST'])
+@invoices_bp.route("/<int:invoice_id>/mark-paid", methods=["POST"])
 @login_required
 def mark_paid(invoice_id):
-    invoice = scoped(Invoice).filter(Invoice.id == invoice_id).first_or_404()
-    invoice.status = 'paid'
+    invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+    invoice.status = "paid"
     db.session.commit()
-    flash('Invoice marked as paid.', 'success')
-    return redirect(url_for('invoices.list_invoices'))
+    flash("Invoice marked as paid.", "success")
+    return redirect(url_for("invoices.view", invoice_id=invoice.id))
+
+
+@invoices_bp.route("/<int:invoice_id>/mark-sent", methods=["POST"])
+@login_required
+def mark_sent(invoice_id):
+    invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+    invoice.status = "sent"
+    db.session.commit()
+    flash("Invoice marked as sent.", "success")
+    return redirect(url_for("invoices.view", invoice_id=invoice.id))
+
+
+@invoices_bp.route("/<int:invoice_id>/delete", methods=["POST"])
+@login_required
+def delete(invoice_id):
+    invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+    db.session.delete(invoice)
+    db.session.commit()
+    flash("Invoice deleted.", "success")
+    return redirect(url_for("invoices.list"))
