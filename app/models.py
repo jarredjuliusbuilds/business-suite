@@ -99,6 +99,20 @@ class Invoice(db.Model):
     line_items = db.relationship('InvoiceLineItem', backref='invoice', cascade='all, delete-orphan', order_by='InvoiceLineItem.id')
 
 
+class Task(db.Model):
+    __tablename__ = "tasks"
+    id = db.Column(db.Integer, primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey("businesses.id"), nullable=False, index=True)
+    contact_id = db.Column(db.Integer, db.ForeignKey("contacts.id"), nullable=True)
+    title = db.Column(db.String(255), nullable=False)
+    due_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="open")  # 'open' or 'done'
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    business = db.relationship("Business", backref="tasks")
+    contact = db.relationship("Contact", backref="tasks")
+
+
 class InvoiceLineItem(db.Model):
     __tablename__ = 'invoice_line_items'
     id = db.Column(db.Integer, primary_key=True)

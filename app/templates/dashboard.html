@@ -1,9 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Dashboard</h3>
-<p>You're logged in.</p>
-<a href="{{ url_for('contacts.list') }}">View Contacts</a>
-<a href="{{ url_for('expenses.list') }}" class="btn btn-outline-primary">View Expenses</a>
-<a href="{{ url_for('invoices.list') }}" class="btn btn-outline-primary">Invoices</a>
-<a href="{{ url_for('auth.logout') }}">Log out</a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Dashboard</h3>
+    <a href="{{ url_for('auth.logout') }}" class="text-muted small">Log out</a>
+</div>
+
+<div class="d-flex gap-3 mb-4 small">
+    <a href="{{ url_for('contacts.list') }}">Contacts</a>
+    <a href="{{ url_for('expenses.list') }}">Expenses</a>
+    <a href="{{ url_for('invoices.list') }}">Invoices</a>
+    <a href="{{ url_for('tasks.list') }}">Tasks</a>
+</div>
+
+<div class="row g-2 mb-4">
+    <div class="col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Money in (this month)</div>
+                <div class="fs-4 fw-bold text-success">R {{ "%.2f"|format(income_this_month) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Money out (this month)</div>
+                <div class="fs-4 fw-bold text-danger">R {{ "%.2f"|format(expenses_total_this_month) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card h-100">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div class="text-muted small">What's left</div>
+                <div class="fs-3 fw-bold {{ 'text-success' if net_profit >= 0 else 'text-danger' }}">R {{ "%.2f"|format(net_profit) }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<canvas id="incomeExpenseChart" height="180" class="mb-4"></canvas>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Unpaid invoices</h5>
+    <span class="text-muted small">{{ unpaid_count }} total &middot; R {{ "%.2f"|format(unpaid_total) }}</span>
+</div>
+
+{% if unpaid_invoices %}
+<div class="list-group mb-4">
+    {% for inv in unpaid_invoices %}
+    <a href="{{ url_for('invoices.view', invoice_id=inv.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between">
+        <span>{{ inv.invoice_number }} &middot; {{ inv.customer.name }}</span>
+        <strong>R {{ "%.2f"|format(inv.total) }}</strong>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted mb-4">No unpaid invoices. Nice.</p>
+{% endif %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+const ctx = document.getElementById('incomeExpenseChart');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: {{ chart_labels|safe }},
+        datasets: [
+            { label: 'Income', data: {{ chart_income|safe }}, backgroundColor: '#198754' },
+            { label: 'Expenses', data: {{ chart_expenses|safe }}, backgroundColor: '#dc3545' }
+        ]
+    },
+    options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } }
+    }
+});
+</script>
 {% endblock %}

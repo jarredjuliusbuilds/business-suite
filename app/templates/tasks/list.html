@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Tasks</h3>
+    <a href="{{ url_for('tasks.new') }}" class="btn btn-primary btn-sm">+ New</a>
+</div>
+
+<div class="mb-3">
+    <a href="{{ url_for('tasks.list', show_done=0) }}" class="btn btn-sm {{ 'btn-secondary' if not show_done else 'btn-outline-secondary' }}">Open</a>
+    <a href="{{ url_for('tasks.list', show_done=1) }}" class="btn btn-sm {{ 'btn-secondary' if show_done else 'btn-outline-secondary' }}">All</a>
+</div>
+
+{% if tasks %}
+<div class="list-group">
+    {% for t in tasks %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+        <form method="POST" action="{{ url_for('tasks.toggle', task_id=t.id) }}" class="d-flex align-items-center gap-2 flex-grow-1">
+            <button type="submit" class="btn btn-sm {{ 'btn-success' if t.status == 'done' else 'btn-outline-secondary' }}" style="width: 32px;">
+                {{ '✓' if t.status == 'done' else '' }}
+            </button>
+            <span class="{{ 'text-decoration-line-through text-muted' if t.status == 'done' else '' }}">
+                {{ t.title }}
+                {% if t.due_date %}<br><small class="text-muted">Due {{ t.due_date.strftime('%d %b %Y') }}</small>{% endif %}
+                {% if t.contact %}<br><small class="text-muted">{{ t.contact.name }}</small>{% endif %}
+            </span>
+        </form>
+        <a href="{{ url_for('tasks.edit', task_id=t.id) }}" class="btn btn-sm btn-link text-muted">Edit</a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted">No tasks. You're all caught up.</p>
+{% endif %}
+
+<div class="mt-4">
+    <a href="{{ url_for('dashboard.index') }}">&larr; Back to dashboard</a>
+</div>
+{% endblock %}

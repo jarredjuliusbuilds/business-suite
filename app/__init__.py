@@ -46,4 +46,7 @@ def create_app():
     from app.invoices.routes import invoices_bp
     app.register_blueprint(invoices_bp)
 
+    from app.tasks.routes import tasks_bp
+    app.register_blueprint(tasks_bp)
+
     return app
