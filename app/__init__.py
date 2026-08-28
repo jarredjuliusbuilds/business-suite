@@ -49,4 +49,12 @@ def create_app():
     from app.tasks.routes import tasks_bp
     app.register_blueprint(tasks_bp)
 
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template("errors/404.html"), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        return render_template("errors/500.html"), 500
+
     return app
