@@ -37,4 +37,7 @@ def create_app():
     from app.contacts.routes import contacts_bp
     app.register_blueprint(contacts_bp)
 
+    from app.expenses.routes import expenses_bp
+    app.register_blueprint(expenses_bp)
+
     return app

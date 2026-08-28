@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.extensions import db
-from app.models import User, Business
+from app.models import User, Business, seed_default_expense_categories
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -27,6 +27,10 @@ def signup():
 
         business = Business(owner_id=user.id, name=business_name)
         db.session.add(business)
+        db.session.flush()  # gets business.id before commit
+
+        seed_default_expense_categories(business.id)
+
         db.session.commit()
 
         login_user(user)

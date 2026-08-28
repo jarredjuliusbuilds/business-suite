@@ -35,3 +35,43 @@ class Contact(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     business = db.relationship("Business", backref="contacts")
+
+
+class ExpenseCategory(db.Model):
+    __tablename__ = "expense_categories"
+    id = db.Column(db.Integer, primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey("businesses.id"), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+
+    business = db.relationship("Business", backref="expense_categories")
+
+
+class Expense(db.Model):
+    __tablename__ = "expenses"
+    id = db.Column(db.Integer, primary_key=True)
+    business_id = db.Column(db.Integer, db.ForeignKey("businesses.id"), nullable=False, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("expense_categories.id"), nullable=True)
+    supplier_id = db.Column(db.Integer, db.ForeignKey("contacts.id"), nullable=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    description = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    business = db.relationship("Business", backref="expenses")
+    category = db.relationship("ExpenseCategory", backref="expenses")
+    supplier = db.relationship("Contact", backref="expenses")
+
+
+DEFAULT_EXPENSE_CATEGORIES = [
+    "Supplies",
+    "Rent",
+    "Utilities",
+    "Transport",
+    "Marketing",
+    "Other",
+]
+
+
+def seed_default_expense_categories(business_id):
+    for name in DEFAULT_EXPENSE_CATEGORIES:
+        db.session.add(ExpenseCategory(business_id=business_id, name=name))
