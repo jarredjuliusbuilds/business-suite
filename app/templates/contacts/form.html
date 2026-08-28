@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-4">{{ 'Edit Contact' if contact else 'New Contact' }}</h3>
+<form method="POST">
+    <div class="mb-3">
+        <label class="form-label">Type</label>
+        <select name="type" class="form-select">
+            <option value="customer" {% if contact and contact.type == 'customer' %}selected{% endif %}>Customer</option>
+            <option value="supplier" {% if contact and contact.type == 'supplier' %}selected{% endif %}>Supplier</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input type="text" name="name" class="form-control" value="{{ contact.name if contact else '' }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control" inputmode="email" value="{{ contact.email if contact else '' }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Phone</label>
+        <input type="tel" name="phone" class="form-control" value="{{ contact.phone if contact else '' }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Notes</label>
+        <textarea name="notes" class="form-control" rows="3">{{ contact.notes if contact else '' }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Save</button>
+</form>
+
+{% if contact %}
+<form method="POST" action="{{ url_for('contacts.delete', contact_id=contact.id) }}" class="mt-2" onsubmit="return confirm('Delete this contact?');">
+    <button type="submit" class="btn btn-outline-danger w-100">Delete</button>
+</form>
+{% endif %}
+<div class="mt-3">
+    <a href="{{ url_for('contacts.list') }}">&larr; Back to contacts</a>
+</div>
+{% endblock %}

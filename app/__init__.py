@@ -34,4 +34,7 @@ def create_app():
     from app.dashboard.routes import dashboard_bp
     app.register_blueprint(dashboard_bp)
 
+    from app.contacts.routes import contacts_bp
+    app.register_blueprint(contacts_bp)
+
     return app
