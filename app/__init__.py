@@ -25,8 +25,11 @@ def create_app():
 
     @app.before_request
     def load_current_business():
+        g.business = None
         if current_user.is_authenticated:
-            g.business_id = current_user.business.id
+            business = current_user.business
+            g.business_id = business.id
+            g.business = business
 
     from app.auth.routes import auth_bp
     app.register_blueprint(auth_bp)
@@ -39,5 +42,8 @@ def create_app():
 
     from app.expenses.routes import expenses_bp
     app.register_blueprint(expenses_bp)
+
+    from app.invoices.routes import invoices_bp
+    app.register_blueprint(invoices_bp)
 
     return app

@@ -108,5 +108,3 @@ class InvoiceLineItem(db.Model):
     unit_price = db.Column(db.Numeric(10,2), nullable=False, default=0)
     line_total = db.Column(db.Numeric(10,2), nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
-
-    invoice = db.relationship('Invoice', backref=db.backref('line_items', lazy=True, cascade='all, delete-orphan'))

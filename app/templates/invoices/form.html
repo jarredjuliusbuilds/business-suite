@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Invoice' if invoice else 'New Invoice' }}{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">{{ 'Edit Invoice' if invoice else 'New Invoice' }}</h1>
+
+<form method="POST" id="invoice-form">
+    <div class="mb-3">
+        <label for="customer_id" class="form-label">Customer</label>
+        <select name="customer_id" id="customer_id" class="form-select" required>
+            <option value="">Select customer</option>
+            {% for c in customers %}
+                <option value="{{ c.id }}" {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            <label for="issue_date" class="form-label">Issue Date</label>
+            <input type="date" name="issue_date" id="issue_date" class="form-control" value="{{ invoice.issue_date.strftime('%Y-%m-%d') if invoice else '' }}" required>
+        </div>
+        <div class="col-6">
+            <label for="due_date" class="form-label">Due Date</label>
+            <input type="date" name="due_date" id="due_date" class="form-control" value="{{ invoice.due_date.strftime('%Y-%m-%d') if invoice and invoice.due_date else '' }}">
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="status" class="form-label">Status</label>
+        <select name="status" id="status" class="form-select">
+            <option value="draft" {% if invoice and invoice.status == 'draft' %}selected{% endif %}>Draft</option>
+            <option value="sent" {% if invoice and invoice.status == 'sent' %}selected{% endif %}>Sent</option>
+            <option value="paid" {% if invoice and invoice.status == 'paid' %}selected{% endif %}>Paid</option>
+        </select>
+    </div>
+
+    <h5>Line Items</h5>
+    <div id="line-items">
+        {% if invoice %}
+            {% for item in invoice.line_items %}
+            <div class="row g-2 mb-2 line-item">
+                <div class="col-12">
+                    <input type="text" name="description" class="form-control" placeholder="Description" value="{{ item.description }}" required>
+                </div>
+                <div class="col-4">
+                    <input type="number" step="0.01" name="quantity" class="form-control" placeholder="Qty" value="{{ item.quantity }}" required inputmode="decimal">
+                </div>
+                <div class="col-4">
+                    <input type="number" step="0.01" name="unit_price" class="form-control" placeholder="Unit Price" value="{{ item.unit_price }}" required inputmode="decimal">
+                </div>
+                <div class="col-4">
+                    <input type="text" class="form-control line-total" value="{{ item.line_total }}" readonly>
+                </div>
+                <div class="col-12 text-end">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="row g-2 mb-2 line-item">
+            <div class="col-12">
+                <input type="text" name="description" class="form-control" placeholder="Description" required>
+            </div>
+            <div class="col-4">
+                <input type="number" step="0.01" name="quantity" class="form-control" placeholder="Qty" value="1" required inputmode="decimal">
+            </div>
+            <div class="col-4">
+                <input type="number" step="0.01" name="unit_price" class="form-control" placeholder="Unit Price" required inputmode="decimal">
+            </div>
+            <div class="col-4">
+                <input type="text" class="form-control line-total" readonly>
+            </div>
+            <div class="col-12 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-line">Remove</button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <button type="button" id="add-line" class="btn btn-outline-secondary btn-sm mb-3">+ Add Line Item</button>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            <label class="form-label">Subtotal</label>
+            <input type="text" id="subtotal" class="form-control" readonly>
+        </div>
+        <div class="col-6">
+            <label class="form-label">Tax ({{ g.business.tax_rate if g.business else 0 }}%)</label>
+            <input type="text" id="tax_amount" class="form-control" readonly>
+        </div>
+        <div class="col-6">
+            <label class="form-label">Total</label>
+            <input type="text" id="total" class="form-control" readonly>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="notes" class="form-label">Notes</label>
+        <textarea name="notes" id="notes" rows="2" class="form-control">{{ invoice.notes if invoice else '' }}</textarea>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save Invoice</button>
+        <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<script>
+// Auto-calculate line totals and invoice totals
+function recalc() {
+    let subtotal = 0;
+    document.querySelectorAll('.line-item').forEach(row => {
+        const qty = parseFloat(row.querySelector('[name="quantity"]').value) || 0;
+        const price = parseFloat(row.querySelector('[name="unit_price"]').value) || 0;
+        const lineTotal = qty * price;
+        row.querySelector('.line-total').value = lineTotal.toFixed(2);
+        subtotal += lineTotal;
+    });
+    const taxRate = parseFloat('{{ g.business.tax_rate if g.business else 0 }}') || 0;
+    const tax = subtotal * (taxRate / 100);
+    const total = subtotal + tax;
+    document.getElementById('subtotal').value = subtotal.toFixed(2);
+    document.getElementById('tax_amount').value = tax.toFixed(2);
+    document.getElementById('total').value = total.toFixed(2);
+}
+
+document.addEventListener('input', recalc);
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('remove-line')) {
+        e.target.closest('.line-item').remove();
+        recalc();
+    }
+});
+document.getElementById('add-line').addEventListener('click', function() {
+    const container = document.getElementById('line-items');
+    const newRow = document.querySelector('.line-item').cloneNode(true);
+    newRow.querySelector('[name="description"]').value = '';
+    newRow.querySelector('[name="quantity"]').value = '1';
+    newRow.querySelector('[name="unit_price"]').value = '';
+    newRow.querySelector('.line-total').value = '';
+    container.appendChild(newRow);
+    recalc();
+});
+// Initial calc
+recalc();
+</script>
+{% endblock %}
