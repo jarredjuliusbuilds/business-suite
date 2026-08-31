@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Business Suite{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', -apple-system, sans-serif; margin: 0; min-height: 100vh; }
+        .auth-panel {
+            background: linear-gradient(135deg, #0F766E 0%, #1E293B 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 60px 40px;
+        }
+        .form-control:focus { border-color: #0F766E; box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1); }
+        .btn-primary { background-color: #0F766E; border-color: #0F766E; border-radius: 8px; font-weight: 500; }
+        .btn-primary:hover { background-color: #0B5C56; border-color: #0B5C56; }
+        .form-control, .form-select { border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-0">
+        <div class="row g-0 min-vh-100">
+            <div class="col-md-5 d-none d-md-flex auth-panel">
+                <h1 class="fw-bold mb-3">Business Suite</h1>
+                <p class="fs-5" style="opacity: 0.85;">Run your whole business from your phone — contacts, invoices, expenses, and tasks, all in one place.</p>
+            </div>
+            <div class="col-md-7 d-flex align-items-center justify-content-center">
+                <div style="max-width: 380px; width: 100%;" class="py-5 px-4">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endwith %}
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
