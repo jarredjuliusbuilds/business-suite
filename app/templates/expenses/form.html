@@ -2,6 +2,7 @@
 {% block content %}
 <h3 class="mb-4">{{ 'Edit Expense' if expense else 'New Expense' }}</h3>
 <form method="POST">
+    {{ csrf_token() }}
     <div class="mb-3">
         <label class="form-label">Amount</label>
         <div class="input-group">
@@ -40,6 +41,7 @@
 
 {% if expense %}
 <form method="POST" action="{{ url_for('expenses.delete', expense_id=expense.id) }}" class="mt-2" onsubmit="return confirm('Delete this expense?');">
+    {{ csrf_token() }}
     <button type="submit" class="btn btn-outline-danger w-100">Delete</button>
 </form>
 {% endif %}

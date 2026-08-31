@@ -2,6 +2,7 @@
 {% block content %}
 <h3 class="mb-4">{{ 'Edit Contact' if contact else 'New Contact' }}</h3>
 <form method="POST">
+    {{ csrf_token() }}
     <div class="mb-3">
         <label class="form-label">Type</label>
         <select name="type" class="form-select">
@@ -30,6 +31,7 @@
 
 {% if contact %}
 <form method="POST" action="{{ url_for('contacts.delete', contact_id=contact.id) }}" class="mt-2" onsubmit="return confirm('Delete this contact?');">
+    {{ csrf_token() }}
     <button type="submit" class="btn btn-outline-danger w-100">Delete</button>
 </form>
 {% endif %}
