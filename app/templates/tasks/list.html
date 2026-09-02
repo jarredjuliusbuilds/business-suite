@@ -15,7 +15,7 @@
     {% for t in tasks %}
     <div class="list-group-item d-flex justify-content-between align-items-center">
         <form method="POST" action="{{ url_for('tasks.toggle', task_id=t.id) }}" class="d-flex align-items-center gap-2 flex-grow-1">
-    {{ csrf_token() }}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm {{ 'btn-success' if t.status == 'done' else 'btn-outline-secondary' }}" style="width: 32px;">
                 {{ '✓' if t.status == 'done' else '' }}
             </button>
