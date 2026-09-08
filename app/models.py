@@ -80,6 +80,9 @@ def seed_default_expense_categories(business_id):
 
 class Invoice(db.Model):
     __tablename__ = 'invoices'
+    __table_args__ = (
+        db.UniqueConstraint('business_id', 'invoice_number', name='uq_invoice_business_number'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=False, index=True)
     invoice_number = db.Column(db.String(20), nullable=False)

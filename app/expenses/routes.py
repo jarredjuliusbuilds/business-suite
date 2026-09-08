@@ -9,6 +9,37 @@ from app.utils import scoped
 expenses_bp = Blueprint("expenses", __name__, url_prefix="/expenses")
 
 
+def _validate_expense_refs(category_id_raw, supplier_id_raw):
+    """Return (category_id, supplier_id, error). Ensures refs belong to this business."""
+    category_id = None
+    supplier_id = None
+    if category_id_raw:
+        try:
+            category_id = int(category_id_raw)
+        except (TypeError, ValueError):
+            return None, None, "Select a valid category."
+        if scoped(ExpenseCategory).filter_by(id=category_id).first() is None:
+            return None, None, "Select a valid category."
+    if supplier_id_raw:
+        try:
+            supplier_id = int(supplier_id_raw)
+        except (TypeError, ValueError):
+            return None, None, "Select a valid supplier."
+        if scoped(Contact).filter_by(id=supplier_id, type="supplier").first() is None:
+            return None, None, "Select a valid supplier."
+    return category_id, supplier_id, None
+
+
+def _parse_amount(raw):
+    try:
+        amount = Decimal((raw or "0").strip())
+    except (InvalidOperation, AttributeError):
+        return None, "Enter a valid amount."
+    if amount <= 0:
+        return None, "Amount must be greater than zero."
+    return amount, None
+
+
 @expenses_bp.route("/")
 @login_required
 def list():
@@ -48,11 +79,9 @@ def new():
 
     if request.method == "POST":
         error = None
-        try:
-            amount = Decimal(request.form.get("amount", "0").strip())
-        except InvalidOperation:
-            error = "Enter a valid amount."
-            amount = None
+        amount, amount_error = _parse_amount(request.form.get("amount", "0"))
+        if amount_error:
+            error = amount_error
 
         expense_date_str = request.form.get("date", "").strip()
         try:
@@ -61,14 +90,20 @@ def new():
             error = "Enter a valid date."
             expense_date = None
 
+        category_id, supplier_id, ref_error = _validate_expense_refs(
+            request.form.get("category_id"), request.form.get("supplier_id")
+        )
+        if ref_error and not error:
+            error = ref_error
+
         if error:
             flash(error, "error")
             return render_template("expenses/form.html", expense=None, categories=categories, suppliers=suppliers)
 
         expense = Expense(
             business_id=g.business_id,
-            category_id=request.form.get("category_id") or None,
-            supplier_id=request.form.get("supplier_id") or None,
+            category_id=category_id,
+            supplier_id=supplier_id,
             date=expense_date,
             amount=amount,
             description=request.form.get("description", "").strip() or None,
@@ -90,11 +125,9 @@ def edit(expense_id):
 
     if request.method == "POST":
         error = None
-        try:
-            amount = Decimal(request.form.get("amount", "0").strip())
-        except InvalidOperation:
-            error = "Enter a valid amount."
-            amount = None
+        amount, amount_error = _parse_amount(request.form.get("amount", "0"))
+        if amount_error:
+            error = amount_error
 
         expense_date_str = request.form.get("date", "").strip()
         try:
@@ -103,12 +136,18 @@ def edit(expense_id):
             error = "Enter a valid date."
             expense_date = None
 
+        category_id, supplier_id, ref_error = _validate_expense_refs(
+            request.form.get("category_id"), request.form.get("supplier_id")
+        )
+        if ref_error and not error:
+            error = ref_error
+
         if error:
             flash(error, "error")
             return render_template("expenses/form.html", expense=expense, categories=categories, suppliers=suppliers)
 
-        expense.category_id = request.form.get("category_id") or None
-        expense.supplier_id = request.form.get("supplier_id") or None
+        expense.category_id = category_id
+        expense.supplier_id = supplier_id
         expense.date = expense_date
         expense.amount = amount
         expense.description = request.form.get("description", "").strip() or None

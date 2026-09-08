@@ -1,11 +1,27 @@
 import os
-from flask import Flask
+import logging
+from flask import Flask, render_template
+
 from app.extensions import db, login_manager, migrate, csrf
+
 
 def create_app():
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "")
+
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        logging.getLogger(__name__).warning(
+            "SECRET_KEY not set — using insecure dev fallback. Set SECRET_KEY in production."
+        )
+        secret_key = "dev-secret-change-me"
+    app.config["SECRET_KEY"] = secret_key
+
+    database_url = os.environ.get("DATABASE_URL") or "sqlite:///app.db"
+    if not os.environ.get("DATABASE_URL"):
+        logging.getLogger(__name__).warning(
+            "DATABASE_URL not set — falling back to sqlite:///app.db for local dev."
+        )
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
@@ -27,8 +43,11 @@ def create_app():
     @app.before_request
     def load_current_business():
         g.business = None
+        g.business_id = None
         if current_user.is_authenticated:
             business = current_user.business
+            if business is None:
+                return
             g.business_id = business.id
             g.business = business
 

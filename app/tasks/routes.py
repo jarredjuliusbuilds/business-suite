@@ -8,6 +8,18 @@ from app.utils import scoped
 tasks_bp = Blueprint("tasks", __name__, url_prefix="/tasks")
 
 
+def _validate_task_contact(raw):
+    if not raw:
+        return None, None
+    try:
+        contact_id = int(raw)
+    except (TypeError, ValueError):
+        return None, "Select a valid contact."
+    if scoped(Contact).filter_by(id=contact_id).first() is None:
+        return None, "Select a valid contact."
+    return contact_id, None
+
+
 @tasks_bp.route("/")
 @login_required
 def list():
@@ -39,9 +51,14 @@ def new():
                 flash("Enter a valid date.", "error")
                 return render_template("tasks/form.html", task=None, contacts=contacts)
 
+        contact_id, contact_error = _validate_task_contact(request.form.get("contact_id"))
+        if contact_error:
+            flash(contact_error, "error")
+            return render_template("tasks/form.html", task=None, contacts=contacts)
+
         task = Task(
             business_id=g.business_id,
-            contact_id=request.form.get("contact_id") or None,
+            contact_id=contact_id,
             title=title,
             due_date=due_date,
         )
@@ -85,7 +102,11 @@ def edit(task_id):
 
         task.title = title
         task.due_date = due_date
-        task.contact_id = request.form.get("contact_id") or None
+        contact_id, contact_error = _validate_task_contact(request.form.get("contact_id"))
+        if contact_error:
+            flash(contact_error, "error")
+            return render_template("tasks/form.html", task=task, contacts=contacts)
+        task.contact_id = contact_id
         db.session.commit()
         flash("Task updated.", "success")
         return redirect(url_for("tasks.list"))

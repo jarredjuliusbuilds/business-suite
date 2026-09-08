@@ -17,6 +17,14 @@ def signup():
             flash("All fields are required.", "error")
             return render_template("auth/signup.html")
 
+        if len(password) < 8:
+            flash("Password must be at least 8 characters.", "error")
+            return render_template("auth/signup.html")
+
+        if len(business_name) > 255 or len(email) > 255:
+            flash("Business name and email must be under 255 characters.", "error")
+            return render_template("auth/signup.html")
+
         if User.query.filter_by(email=email).first():
             flash("An account with that email already exists.", "error")
             return render_template("auth/signup.html")

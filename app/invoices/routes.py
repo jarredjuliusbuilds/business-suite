@@ -7,12 +7,23 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from datetime import datetime, date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from xml.sax.saxutils import escape as xml_escape
 from app.extensions import db
 from app.models import Invoice, InvoiceLineItem, Contact, Business
 from app.utils import scoped
 
 invoices_bp = Blueprint("invoices", __name__, url_prefix="/invoices")
+
+CENT = Decimal("0.01")
+
+
+def _money(value: Decimal) -> Decimal:
+    return value.quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def _esc(value) -> str:
+    return xml_escape(str(value or ""))
 
 
 def _generate_invoice_number():
@@ -29,7 +40,10 @@ def list():
     status_filter = request.args.get("status")
     query = scoped(Invoice)
     if status_filter:
-        query = query.filter(Invoice.status == status_filter)
+        if status_filter not in ("draft", "sent", "paid", "overdue"):
+            status_filter = None
+        else:
+            query = query.filter(Invoice.status == status_filter)
     invoices = query.order_by(Invoice.issue_date.desc()).all()
     return render_template("invoices/list.html", invoices=invoices, status_filter=status_filter or "")
 
@@ -42,8 +56,19 @@ def new():
     if request.method == "POST":
         error = None
         customer_id = request.form.get("customer_id")
+        customer = None
         if not customer_id:
             error = "Select a customer."
+        else:
+            try:
+                customer_id_int = int(customer_id)
+            except (TypeError, ValueError):
+                error = "Select a valid customer."
+                customer = None
+            else:
+                customer = scoped(Contact).filter_by(id=customer_id_int, type="customer").first()
+                if customer is None:
+                    error = "Select a valid customer."
 
         issue_date_str = request.form.get("issue_date", "").strip()
         try:
@@ -76,12 +101,18 @@ def new():
             except InvalidOperation:
                 error = "Enter valid numbers for quantity and price on every line."
                 break
-            line_total = qty_dec * price_dec
+            if qty_dec <= 0 or price_dec < 0:
+                error = "Quantity must be above zero and price cannot be negative."
+                break
+            line_total = _money(qty_dec * price_dec)
             subtotal += line_total
             line_items_data.append((desc, qty_dec, price_dec, line_total))
 
         if not line_items_data and not error:
             error = "Add at least one line item."
+
+        if due_date and issue_date and due_date < issue_date and not error:
+            error = "Due date cannot be before issue date."
 
         if error:
             flash(error, "error")
@@ -90,13 +121,14 @@ def new():
         tax_rate = Decimal("0")
         business = Business.query.filter_by(id=g.business_id).first()
         tax_rate = business.tax_rate or Decimal("0")
-        tax_amount = (subtotal * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
-        total = subtotal + tax_amount
+        subtotal = _money(subtotal)
+        tax_amount = _money(subtotal * tax_rate / Decimal("100"))
+        total = _money(subtotal + tax_amount)
 
         invoice = Invoice(
             business_id=g.business_id,
             invoice_number=_generate_invoice_number(),
-            customer_id=customer_id,
+            customer_id=customer.id,
             issue_date=issue_date,
             due_date=due_date,
             status="draft",
@@ -148,8 +180,8 @@ def download_pdf(invoice_id):
     elements = []
 
     header_data = [[
-        Paragraph(invoice.business.name, business_style),
-        Paragraph(f"<b>INVOICE</b><br/>{invoice.invoice_number}", title_style),
+        Paragraph(_esc(invoice.business.name), business_style),
+        Paragraph(f"<b>INVOICE</b><br/>{_esc(invoice.invoice_number)}", title_style),
     ]]
     header_table = Table(header_data, colWidths=[280, 200])
     header_table.setStyle(TableStyle([
@@ -159,16 +191,16 @@ def download_pdf(invoice_id):
     elements.append(header_table)
     elements.append(Spacer(1, 20*mm))
 
-    customer_lines = f"<b>Bill To:</b><br/>{invoice.customer.name}"
+    customer_lines = f"<b>Bill To:</b><br/>{_esc(invoice.customer.name)}"
     if invoice.customer.email:
-        customer_lines += f"<br/>{invoice.customer.email}"
+        customer_lines += f"<br/>{_esc(invoice.customer.email)}"
     if invoice.customer.phone:
-        customer_lines += f"<br/>{invoice.customer.phone}"
+        customer_lines += f"<br/>{_esc(invoice.customer.phone)}"
 
-    meta_lines = f"Issue Date: {invoice.issue_date.strftime('%d %b %Y')}<br/>"
+    meta_lines = f"Issue Date: {_esc(invoice.issue_date.strftime('%d %b %Y'))}<br/>"
     if invoice.due_date:
-        meta_lines += f"Due Date: {invoice.due_date.strftime('%d %b %Y')}<br/>"
-    meta_lines += f"Status: {invoice.status.upper()}"
+        meta_lines += f"Due Date: {_esc(invoice.due_date.strftime('%d %b %Y'))}<br/>"
+    meta_lines += f"Status: {_esc(invoice.status.upper())}"
 
     meta_data = [[Paragraph(customer_lines, normal), Paragraph(meta_lines, normal)]]
     meta_table = Table(meta_data, colWidths=[280, 200])
@@ -179,7 +211,7 @@ def download_pdf(invoice_id):
     line_data = [["Description", "Qty", "Unit Price", "Total"]]
     for item in invoice.line_items:
         line_data.append([
-            item.description,
+            Paragraph(_esc(item.description), normal),
             str(item.quantity),
             f"R {item.unit_price:.2f}",
             f"R {item.line_total:.2f}",
@@ -216,7 +248,7 @@ def download_pdf(invoice_id):
 
     if invoice.notes:
         elements.append(Spacer(1, 15*mm))
-        elements.append(Paragraph(invoice.notes, small_grey))
+        elements.append(Paragraph(_esc(invoice.notes), small_grey))
 
     doc.build(elements)
     buffer.seek(0)
@@ -232,6 +264,12 @@ def download_pdf(invoice_id):
 @login_required
 def mark_paid(invoice_id):
     invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+    if invoice.status == "paid":
+        flash("Invoice is already paid.", "error")
+        return redirect(url_for("invoices.view", invoice_id=invoice.id))
+    if invoice.status not in ("draft", "sent", "overdue"):
+        flash("Only draft, sent or overdue invoices can be marked as paid.", "error")
+        return redirect(url_for("invoices.view", invoice_id=invoice.id))
     invoice.status = "paid"
     db.session.commit()
     flash("Invoice marked as paid.", "success")
@@ -242,6 +280,9 @@ def mark_paid(invoice_id):
 @login_required
 def mark_sent(invoice_id):
     invoice = scoped(Invoice).filter_by(id=invoice_id).first_or_404()
+    if invoice.status != "draft":
+        flash("Only draft invoices can be marked as sent.", "error")
+        return redirect(url_for("invoices.view", invoice_id=invoice.id))
     invoice.status = "sent"
     db.session.commit()
     flash("Invoice marked as sent.", "success")
