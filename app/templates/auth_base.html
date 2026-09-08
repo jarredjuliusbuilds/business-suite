@@ -39,6 +39,9 @@
                         {% endfor %}
                     {% endwith %}
                     {% block content %}{% endblock %}
+                    <div class="text-center mt-4">
+                        <a href="{{ url_for('dashboard.legal') }}" class="small text-muted">Terms of Use & Privacy</a>
+                    </div>
                 </div>
             </div>
         </div>

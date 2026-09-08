@@ -12,6 +12,11 @@ import json
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
+@dashboard_bp.route("/legal")
+def legal():
+    return render_template("legal.html")
+
+
 def _sum_total(query, column):
     value = query.with_entities(func.coalesce(func.sum(column), 0)).scalar()
     return Decimal(str(value)) if value is not None else Decimal("0.00")
