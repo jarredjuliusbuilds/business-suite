@@ -10,10 +10,7 @@ def create_app():
 
     secret_key = os.environ.get("SECRET_KEY")
     if not secret_key:
-        logging.getLogger(__name__).warning(
-            "SECRET_KEY not set — using insecure dev fallback. Set SECRET_KEY in production."
-        )
-        secret_key = "dev-secret-change-me"
+        raise RuntimeError("SECRET_KEY environment variable is not set. This is required for production security.")
     app.config["SECRET_KEY"] = secret_key
 
     database_url = os.environ.get("DATABASE_URL") or "sqlite:///app.db"

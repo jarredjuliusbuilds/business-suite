@@ -7,7 +7,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     business = db.relationship("Business", backref="owner", uselist=False)
 
@@ -20,7 +20,7 @@ class Business(db.Model):
     currency = db.Column(db.String(3), default="ZAR")
     tax_rate = db.Column(db.Numeric(5, 2), default=0)
     next_invoice_number = db.Column(db.Integer, nullable=False, default=1)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
 class Contact(db.Model):
@@ -33,7 +33,7 @@ class Contact(db.Model):
     phone = db.Column(db.String(50))
     notes = db.Column(db.Text)
     last_contact = db.Column(db.Date)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     business = db.relationship("Business", backref="contacts")
 
@@ -56,7 +56,7 @@ class Expense(db.Model):
     date = db.Column(db.Date, nullable=False, index=True)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     description = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     business = db.relationship("Business", backref="expenses")
     category = db.relationship("ExpenseCategory", backref="expenses")
@@ -110,7 +110,7 @@ class Task(db.Model):
     title = db.Column(db.String(255), nullable=False)
     due_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="open")  # 'open' or 'done'
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     business = db.relationship("Business", backref="tasks")
     contact = db.relationship("Contact", backref="tasks")

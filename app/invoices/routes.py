@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, g, Response
 from flask_login import login_required
-from io import BytesIO
+import csv
+from io import BytesIO, StringIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib import colors
@@ -32,6 +33,32 @@ def _generate_invoice_number():
     number = business.next_invoice_number
     business.next_invoice_number = number + 1
     return f"INV-{number:04d}"
+
+
+@invoices_bp.route("/export/csv")
+@login_required
+def export_csv():
+    invoices = scoped(Invoice).order_by(Invoice.issue_date.desc()).all()
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Invoice Number", "Customer", "Date", "Status", "Total"])
+    
+    for inv in invoices:
+        writer.writerow([
+            inv.invoice_number,
+            inv.customer.name,
+            inv.issue_date.strftime("%Y-%m-%d"),
+            inv.status,
+            f"{inv.total:.2f}"
+        ])
+    
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=invoices_export.csv"}
+    )
 
 
 @invoices_bp.route("/")
