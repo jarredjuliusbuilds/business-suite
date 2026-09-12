@@ -29,7 +29,11 @@ def _esc(value) -> str:
 
 def _generate_invoice_number():
     """Atomically claim the next invoice number for the current business."""
+    if not g.business_id:
+        abort(403)
     business = Business.query.filter_by(id=g.business_id).with_for_update().first()
+    if not business:
+        abort(404)
     number = business.next_invoice_number
     business.next_invoice_number = number + 1
     return f"INV-{number:04d}"
