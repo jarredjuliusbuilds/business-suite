@@ -38,24 +38,15 @@ def _generate_invoice_number():
 @invoices_bp.route("/export/csv")
 @login_required
 def export_csv():
-    invoices = scoped(Invoice).order_by(Invoice.issue_date.desc()).all()
+    def generate():
+        yield "Invoice Number,Customer,Date,Status,Total\n"
+        # Use a stream-like query to avoid loading all into memory
+        query = scoped(Invoice).order_by(Invoice.issue_date.desc())
+        for inv in query.yield_per(100):
+            yield f"{inv.invoice_number},{inv.customer.name},{inv.issue_date.strftime('%Y-%m-%d')},{inv.status},{inv.total:.2f}\n"
     
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Invoice Number", "Customer", "Date", "Status", "Total"])
-    
-    for inv in invoices:
-        writer.writerow([
-            inv.invoice_number,
-            inv.customer.name,
-            inv.issue_date.strftime("%Y-%m-%d"),
-            inv.status,
-            f"{inv.total:.2f}"
-        ])
-    
-    output.seek(0)
     return Response(
-        output.getvalue(),
+        generate(),
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=invoices_export.csv"}
     )

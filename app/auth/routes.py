@@ -1,3 +1,4 @@
+import re
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -15,6 +16,10 @@ def signup():
 
         if not email or not password or not business_name:
             flash("All fields are required.", "error")
+            return render_template("auth/signup.html")
+
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            flash("Please enter a valid email address.", "error")
             return render_template("auth/signup.html")
 
         if len(password) < 8:

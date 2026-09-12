@@ -21,12 +21,14 @@
         }
         body {
             font-family: 'Inter', -apple-system, sans-serif;
-            background-color: #F8FAFC;
+            background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
             color: #1E293B;
+            min-height: 100vh;
         }
         .btn-primary {
             background-color: #0F766E;
             border-color: #0F766E;
+            box-shadow: 0 2px 4px rgba(15, 118, 110, 0.2);
         }
         .btn-primary:hover, .btn-primary:active {
             background-color: #0B5C56;
@@ -58,21 +60,39 @@
         .card {
             border: 1px solid #E2E8F0;
             border-radius: 16px;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             background: white;
             border-left: 4px solid transparent;
+            overflow: hidden;
         }
         .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             border-left-color: #0F766E;
         }
         .metric-card {
             background: #FFFFFF;
             border: 1px solid #F1F5F9 !important;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
-            border-left: 4px solid #0F766E !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+            border-top: 4px solid #0F766E !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1) !important;
+            border-top-color: #10B981 !important;
+        }
+        .metric-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, transparent 50%, rgba(15, 118, 110, 0.03) 50%);
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }

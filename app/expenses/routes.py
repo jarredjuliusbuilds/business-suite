@@ -1,11 +1,19 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, g
+from flask import Blueprint, render_template, redirect, url_for, flash, request, g, Response
 from flask_login import login_required
 from datetime import datetime, date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import func
 from app.extensions import db
 from app.models import Expense, ExpenseCategory, Contact
 from app.utils import scoped
+import json
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from xml.sax.saxutils import escape as xml_escape
 
 expenses_bp = Blueprint("expenses", __name__, url_prefix="/expenses")
 
@@ -40,6 +48,94 @@ def _parse_amount(raw):
         return None, "Amount must be greater than zero."
     return amount, None
 
+
+def _generate_expenses_pdf(start_date, end_date, expenses, total, currency="R"):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=20*mm, rightMargin=20*mm)
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=22, textColor=colors.HexColor("#0F766E"), spaceAfter=20)
+    label_style = ParagraphStyle("Label", parent=styles["Normal"], fontSize=12, textColor=colors.HexColor("#64748B"))
+    
+    elements = []
+    elements.append(Paragraph("Expense Report", title_style))
+    elements.append(Paragraph(f"Period: {start_date} to {end_date}", label_style))
+    elements.append(Spacer(1, 10*mm))
+    
+    line_data = [["Date", "Description", "Category", "Amount"]]
+    for e in expenses:
+        line_data.append([
+            e.date.strftime('%d %b %Y'),
+            e.description or "No description",
+            e.category.name if e.category else "Uncategorized",
+            f"{currency} {e.amount:.2f}"
+        ])
+    
+    t = Table(line_data, colWidths=[40*mm, 80*mm, 50*mm, 40*mm])
+    t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, colors.black),
+        ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 10*mm))
+    
+    total_data = [["Total Expenses", f"{currency} {total:.2f}"]]
+    total_table = Table(total_data, colWidths=[100*mm, 40*mm], hAlign="RIGHT")
+    total_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (1, 0), (1, 0), 14),
+    ]))
+    elements.append(total_table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.read()
+
+@expenses_bp.route("/export/pdf")
+@login_required
+def export_pdf():
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+    category_id = request.args.get("category_id", type=int)
+    
+    today = date.today()
+    start_date = date(today.year, 1, 1)
+    end_date = today
+    
+    if start_date_str:
+        try: start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        except ValueError: pass
+    if end_date_str:
+        try: end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except ValueError: pass
+        
+    query = scoped(Expense).filter(Expense.date >= start_date, Expense.date <= end_date)
+    if category_id:
+        query = query.filter(Expense.category_id == category_id)
+        
+    expenses = query.order_by(Expense.date.desc()).all()
+    total = query.with_entities(func.sum(Expense.amount)).scalar() or Decimal("0.00")
+    
+    business = Business.query.filter_by(id=g.business_id).first()
+    currency = business.currency if business else "R"
+    
+    pdf_content = _generate_expenses_pdf(
+        start_date.isoformat(), 
+        end_date.isoformat(), 
+        expenses, 
+        total, 
+        currency=currency
+    )
+    
+    return Response(
+        pdf_content,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=expenses_{start_date}_{end_date}.pdf"}
+    )
 
 @expenses_bp.route("/summary")
 @login_required

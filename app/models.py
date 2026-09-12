@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 from flask_login import UserMixin
 from app.extensions import db
 
@@ -94,8 +95,25 @@ class Invoice(db.Model):
     subtotal = db.Column(db.Numeric(10,2), nullable=False, default=0)
     tax_amount = db.Column(db.Numeric(10,2), nullable=False, default=0)
     total = db.Column(db.Numeric(10,2), nullable=False, default=0)
+    tax_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(db.DateTime, nullable=True, onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    @property
+    def calculated_total(self):
+        subtotal = sum(item.line_total for item in self.line_items)
+        tax_rate = self.tax_rate or 0
+        tax_amount = subtotal * (tax_rate / 100)
+        return subtotal + tax_amount
+
+    def sync_totals(self):
+        subtotal = sum(item.line_total for item in self.line_items)
+        tax_rate = self.business.tax_rate or 0
+        tax_amount = subtotal * (tax_rate / 100)
+        self.subtotal = subtotal
+        self.tax_amount = tax_amount
+        self.total = subtotal + tax_amount
+        self.tax_rate = tax_rate
 
     business = db.relationship('Business', backref=db.backref('invoices', lazy=True))
     customer = db.relationship('Contact', backref=db.backref('invoices', lazy=True))
