@@ -15,7 +15,7 @@ class User(UserMixin, db.Model):
 class Business(db.Model):
     __tablename__ = "businesses"
     id = db.Column(db.Integer, primary_key=True)
-    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     currency = db.Column(db.String(3), default="ZAR")
     tax_rate = db.Column(db.Numeric(5, 2), default=0)
@@ -86,7 +86,7 @@ class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     business_id = db.Column(db.Integer, db.ForeignKey('businesses.id'), nullable=False, index=True)
     invoice_number = db.Column(db.String(20), nullable=False)
-    customer_id = db.Column(db.Integer, db.ForeignKey('contacts.id'), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('contacts.id'), nullable=False, index=True)
     issue_date = db.Column(db.Date, nullable=False, default=datetime.date.today)
     due_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default='draft')

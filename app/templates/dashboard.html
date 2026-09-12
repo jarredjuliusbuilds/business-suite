@@ -81,13 +81,45 @@ new Chart(ctx, {
     data: {
         labels: {{ chart_labels|safe }},
         datasets: [
-            { label: 'Income', data: {{ chart_income|safe }}, backgroundColor: '#198754' },
-            { label: 'Expenses', data: {{ chart_expenses|safe }}, backgroundColor: '#dc3545' }
+            { 
+                label: 'Income', 
+                data: {{ chart_income|safe }}, 
+                backgroundColor: '#0F766E',
+                borderRadius: 6,
+                barThickness: 20
+            },
+            { 
+                label: 'Expenses', 
+                data: {{ chart_expenses|safe }}, 
+                backgroundColor: '#EF4444',
+                borderRadius: 6,
+                barThickness: 20
+            }
         ]
     },
     options: {
         responsive: true,
-        scales: { y: { beginAtZero: true } }
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#1E293B',
+                titleFont: { size: 12, weight: 'bold' },
+                bodyFont: { size: 12 },
+                padding: 12,
+                cornerRadius: 8
+            }
+        },
+        scales: { 
+            y: { 
+                beginAtZero: true,
+                grid: { color: '#F1F5F9' },
+                ticks: { color: '#64748B', font: { size: 11 } }
+            },
+            x: {
+                grid: { display: false },
+                ticks: { color: '#64748B', font: { size: 11 } }
+            }
+        }
     }
 });
 </script>

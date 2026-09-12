@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
+from sqlalchemy import func
 from app.extensions import db
 from app.models import Expense, ExpenseCategory, Contact
 from app.utils import scoped
@@ -40,6 +41,39 @@ def _parse_amount(raw):
     return amount, None
 
 
+@expenses_bp.route("/summary")
+@login_required
+def summary():
+    # Calculate totals per category using SQL GROUP BY for performance
+    results = (
+        db.session.query(ExpenseCategory.name, func.sum(Expense.amount))
+        .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
+        .filter(Expense.business_id == g.business_id)
+        .group_by(ExpenseCategory.name)
+        .all()
+    )
+
+    # Handle uncategorized expenses
+    uncategorized_total = db.session.query(
+        func.sum(Expense.amount)
+    ).filter(
+        Expense.business_id == g.business_id, 
+        Expense.category_id == None
+    ).scalar() or Decimal("0.00")
+
+    category_totals = {name: total for name, total in results}
+    if uncategorized_total > 0:
+        category_totals["Uncategorized"] = uncategorized_total
+
+    sorted_categories = sorted(category_totals.items(), key=lambda x: x[1], reverse=True)
+    total = sum(category_totals.values(), Decimal("0.00"))
+    
+    return render_template(
+        "expenses/summary.html",
+        category_totals=sorted_categories,
+        total=total
+    )
+
 @expenses_bp.route("/")
 @login_required
 def list():
@@ -57,7 +91,7 @@ def list():
         query = query.filter(Expense.date <= end_date)
 
     expenses = query.order_by(Expense.date.desc()).all()
-    total = sum((e.amount for e in expenses), Decimal("0.00"))
+    total = query.with_entities(func.sum(Expense.amount)).scalar() or Decimal("0.00")
     categories = scoped(ExpenseCategory).order_by(ExpenseCategory.name).all()
 
     return render_template(

@@ -9,4 +9,8 @@ def scoped(model):
         if getattr(current_user, "is_authenticated", False):
             abort(403)
         abort(401)
-    return model.query.filter_by(business_id=business_id)
+    
+    # Only apply filter if the model actually has a business_id column
+    if hasattr(model, "business_id"):
+        return model.query.filter_by(business_id=business_id)
+    return model.query
