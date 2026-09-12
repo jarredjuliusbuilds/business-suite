@@ -97,6 +97,7 @@ def profit_loss_pdf():
         mimetype="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=profit_loss_{start_date}_{end_date}.pdf"}
     )
+@dashboard_bp.route("/")
 @login_required
 def index():
     today = date.today()

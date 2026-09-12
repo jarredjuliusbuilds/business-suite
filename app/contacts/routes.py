@@ -17,8 +17,16 @@ def _clean_contact_type(raw):
 @contacts_bp.route("/")
 @login_required
 def list():
-    contacts = scoped(Contact).order_by(Contact.name).all()
-    return render_template("contacts/list.html", contacts=contacts)
+    q = request.args.get("q", "").strip()
+    query = scoped(Contact)
+    if q:
+        query = query.filter(
+            (Contact.name.ilike(f"%{q}%")) | 
+            (Contact.email.ilike(f"%{q}%")) | 
+            (Contact.phone.ilike(f"%{q}%"))
+        )
+    contacts = query.order_by(Contact.name).all()
+    return render_template("contacts/list.html", contacts=contacts, q=q)
 
 
 @contacts_bp.route("/new", methods=["GET", "POST"])
