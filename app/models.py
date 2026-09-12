@@ -94,8 +94,8 @@ class Invoice(db.Model):
     subtotal = db.Column(db.Numeric(10,2), nullable=False, default=0)
     tax_amount = db.Column(db.Numeric(10,2), nullable=False, default=0)
     total = db.Column(db.Numeric(10,2), nullable=False, default=0)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=True, onupdate=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = db.Column(db.DateTime, nullable=True, onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     business = db.relationship('Business', backref=db.backref('invoices', lazy=True))
     customer = db.relationship('Contact', backref=db.backref('invoices', lazy=True))
@@ -124,4 +124,4 @@ class InvoiceLineItem(db.Model):
     quantity = db.Column(db.Numeric(10,2), nullable=False, default=1)
     unit_price = db.Column(db.Numeric(10,2), nullable=False, default=0)
     line_total = db.Column(db.Numeric(10,2), nullable=False, default=0)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))

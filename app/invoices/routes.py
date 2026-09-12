@@ -5,7 +5,7 @@ from io import BytesIO, StringIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -175,7 +175,6 @@ def new():
                 unit_price=price,
                 line_total=line_total,
             ))
-
         db.session.commit()
         flash(f"Invoice {invoice.invoice_number} created.", "success")
         return redirect(url_for("invoices.view", invoice_id=invoice.id))
@@ -236,12 +235,13 @@ def download_pdf(invoice_id):
     elements.append(Spacer(1, 15*mm))
 
     line_data = [["Description", "Qty", "Unit Price", "Total"]]
+    currency = invoice.business.currency
     for item in invoice.line_items:
         line_data.append([
             Paragraph(_esc(item.description), normal),
             str(item.quantity),
-            f"R {item.unit_price:.2f}",
-            f"R {item.line_total:.2f}",
+            f"{currency} {item.unit_price:.2f}",
+            f"{currency} {item.line_total:.2f}",
         ])
 
     items_table = Table(line_data, colWidths=[240, 60, 90, 90])
@@ -259,9 +259,9 @@ def download_pdf(invoice_id):
     elements.append(Spacer(1, 10*mm))
 
     totals_data = [
-        ["Subtotal", f"R {invoice.subtotal:.2f}"],
-        ["Tax", f"R {invoice.tax_amount:.2f}"],
-        ["Total", f"R {invoice.total:.2f}"],
+        ["Subtotal", f"{currency} {invoice.subtotal:.2f}"],
+        ["Tax", f"{currency} {invoice.tax_amount:.2f}"],
+        ["Total", f"{currency} {invoice.total:.2f}"],
     ]
     totals_table = Table(totals_data, colWidths=[100, 100], hAlign="RIGHT")
     totals_table.setStyle(TableStyle([
@@ -324,3 +324,113 @@ def delete(invoice_id):
     db.session.commit()
     flash("Invoice deleted.", "success")
     return redirect(url_for("invoices.list"))
+
+
+@invoices_bp.route("/export/pdf_all")
+@login_required
+def export_pdf_all():
+    """Export all paid invoices as a single PDF bundle."""
+    invoices = scoped(Invoice).filter_by(status="paid").order_by(Invoice.issue_date.desc()).all()
+    if not invoices:
+        flash("No paid invoices found to export.", "error")
+        return redirect(url_for("invoices.list"))
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=20*mm, rightMargin=20*mm)
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle("InvoiceTitle", parent=styles["Heading1"], fontSize=24, textColor=colors.HexColor("#444444"))
+    business_style = ParagraphStyle("BusinessName", parent=styles["Heading2"], fontSize=16)
+    normal = styles["Normal"]
+    small_grey = ParagraphStyle("SmallGrey", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#666666"))
+    
+    elements = []
+    
+    for invoice in invoices:
+        # Header
+        header_data = [[
+            Paragraph(_esc(invoice.business.name), business_style),
+            Paragraph(f"<b>INVOICE</b><br/>{_esc(invoice.invoice_number)}", title_style),
+        ]]
+        header_table = Table(header_data, colWidths=[280, 200])
+        header_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ]))
+        elements.append(header_table)
+        elements.append(Spacer(1, 10*mm))
+
+        # Meta
+        customer_lines = f"<b>Bill To:</b><br/>{_esc(invoice.customer.name)}"
+        if invoice.customer.email:
+            customer_lines += f"<br/>{_esc(invoice.customer.email)}"
+        if invoice.customer.phone:
+            customer_lines += f"<br/>{_esc(invoice.customer.phone)}"
+
+        meta_lines = f"Issue Date: {_esc(invoice.issue_date.strftime('%d %b %Y'))}<br/>"
+        if invoice.due_date:
+            meta_lines += f"Due Date: {_esc(invoice.due_date.strftime('%d %b %Y'))}<br/>"
+        meta_lines += f"Status: {_esc(invoice.status.upper())}"
+
+        meta_data = [[Paragraph(customer_lines, normal), Paragraph(meta_lines, normal)]]
+        meta_table = Table(meta_data, colWidths=[280, 200])
+        meta_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        elements.append(meta_table)
+        elements.append(Spacer(1, 10*mm))
+
+        # Items
+        line_data = [["Description", "Qty", "Unit Price", "Total"]]
+        currency = invoice.business.currency
+        for item in invoice.line_items:
+            line_data.append([
+                Paragraph(_esc(item.description), normal),
+                str(item.quantity),
+                f"{currency} {item.unit_price:.2f}",
+                f"{currency} {item.line_total:.2f}",
+            ])
+
+        items_table = Table(line_data, colWidths=[240, 60, 90, 90])
+        items_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#666666")),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.2, colors.HexColor("#333333")),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#eeeeee")),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(items_table)
+        elements.append(Spacer(1, 5*mm))
+
+        # Totals
+        totals_data = [
+            ["Subtotal", f"{currency} {invoice.subtotal:.2f}"],
+            ["Tax", f"{currency} {invoice.tax_amount:.2f}"],
+            ["Total", f"{currency} {invoice.total:.2f}"],
+        ]
+        totals_table = Table(totals_data, colWidths=[100, 100], hAlign="RIGHT")
+        totals_table.setStyle(TableStyle([
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 2), (-1, 2), 12),
+            ("LINEABOVE", (0, 2), (-1, 2), 1.2, colors.HexColor("#333333")),
+            ("TOPPADDING", (0, 2), (-1, 2), 8),
+        ]))
+        elements.append(totals_table)
+        
+        if invoice.notes:
+            elements.append(Spacer(1, 5*mm))
+            elements.append(Paragraph(_esc(invoice.notes), small_grey))
+
+        # Use a proper PageBreak for professional bundling
+        elements.append(PageBreak())
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    return Response(
+        buffer.read(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=paid_invoices_bundle.pdf"}
+    )
