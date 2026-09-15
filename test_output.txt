@@ -1,0 +1,4 @@
+SECRET_KEY not set — using secure dev fallback. Set SECRET_KEY in production.
+DATABASE_URL not set — falling back to sqlite:///app.db for local dev.
+Dashboard status: 302
+Data: b'<!doctype html>\n<html lang=en>\n<title>Redirecting...</title>\n<h1>Redirecting...</h1>\n<p>You should be redirected automatically to the target URL: <a href="/login?next=%2F">/login?next=%2F</a>. If not, click the link.\n'
