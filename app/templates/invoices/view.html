@@ -35,18 +35,12 @@
 {% if invoice.notes %}<p class="text-muted">{{ invoice.notes }}</p>{% endif %}
 
 <div class="d-flex gap-2 mb-3">
-    {% if invoice.status == 'draft' %}
-    <form method="POST" action="{{ url_for('invoices.mark_sent', invoice_id=invoice.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline-primary btn-sm">Mark as sent</button>
-    </form>
-    {% endif %}
-    {% if invoice.status in ['draft', 'sent', 'overdue'] %}
-    <form method="POST" action="{{ url_for('invoices.mark_paid', invoice_id=invoice.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline-success btn-sm">Mark as paid</button>
-    </form>
-    {% endif %}
+    <a href="{{ url_for('invoices.download_pdf', invoice_id=invoice.id) }}" class="btn btn-outline-secondary btn-sm flex-fill">
+        <i class="bi bi-download"></i> PDF
+    </a>
+    <a href="https://wa.me/?text={{ ('Invoice ' ~ invoice.invoice_number ~ ' from ' ~ invoice.business.name ~ ' — Total: R' ~ '%.2f'|format(invoice.total) ~ ' — View: ' ~ url_for('invoices.public_view', token=invoice.public_token, _external=True))|urlencode }}" target="_blank" class="btn btn-outline-success btn-sm flex-fill">
+        <i class="bi bi-whatsapp"></i> WhatsApp
+    </a>
 </div>
 
 <form method="POST" action="{{ url_for('invoices.delete', invoice_id=invoice.id) }}" onsubmit="return confirm('Delete this invoice?');">

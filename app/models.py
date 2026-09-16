@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from decimal import Decimal
 from flask_login import UserMixin
 from app.extensions import db
@@ -98,6 +99,7 @@ class Invoice(db.Model):
     tax_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = db.Column(db.DateTime, nullable=True, onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+    public_token = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
 
     @property
     def calculated_total(self):
